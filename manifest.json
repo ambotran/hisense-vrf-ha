@@ -1,0 +1,11 @@
+{
+  "domain": "hisense_vrf",
+  "name": "Hisense VRF",
+  "version": "0.1.0",
+  "documentation": "https://github.com/yourusername/hisense-vrf-ha",
+  "requirements": ["pycryptodome>=3.17.0"],
+  "dependencies": [],
+  "codeowners": [],
+  "iot_class": "cloud_polling",
+  "config_flow": true
+}
