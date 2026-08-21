@@ -98,41 +98,40 @@ class HisenseVRFApi:
             await self._session.close()
 
     async def login(self) -> bool:
-        """Login and obtain access token."""
-        session = await self._get_session()
-        # RSA encrypt password using account public key
-        from .const import RSA_PUBLIC_KEY
-        import base64
-        key = RSA.import_key(RSA_PUBLIC_KEY)
-        cipher = PKCS1_v1_5.new(key)
-        encrypted_pwd = base64.b64encode(
-            cipher.encrypt(self._password.encode())
-        ).decode()
+    """Login and obtain access token."""
+    session = await self._get_session()
+    
+    # Build params WITHOUT accessToken for login
+    import hashlib, uuid, time as _time
+    params = {
+        "apiVersion": API_VERSION,
+        "timestamp": str(int(_time.time() * 1000)),
+        "languageId": LANGUAGE_ID,
+        "timezone": _get_timezone(),
+        "randStr": _get_rand_str(),
+        "loginName": self._username,
+        "loginPwd": self._password,
+        "loginType": "0",
+    }
+    params["sign"] = _sign(params)
 
-        params = _build_params("", {
-            "loginName": self._username,
-            "loginPwd": encrypted_pwd,
-            "loginType": "0",
-        })
-
-        try:
-            async with session.post(
-                f"{API_BASE_AUTH}auth/login",
-                json=params,
-                headers={"Content-Type": "application/json"},
-            ) as resp:
-                data = await resp.json(content_type=None)
-                _LOGGER.debug("Login response: %s", data)
-
-                response = data.get("response", {})
-                if data.get("resultCode") == 0 or (response and response.get("resultCode") == 0):
-                    token_data = response.get("data", response)
-                    self._access_token = token_data.get("accessToken", "")
-                    self._refresh_token = token_data.get("refreshToken", "")
-                    return bool(self._access_token)
-        except Exception as e:
-            _LOGGER.error("Login failed: %s", e)
-        return False
+    try:
+        async with session.post(
+            f"{API_BASE_AUTH}auth/login",
+            json=params,
+            headers={"Content-Type": "application/json"},
+        ) as resp:
+            data = await resp.json(content_type=None)
+            _LOGGER.debug("Login response: %s", data)
+            response = data.get("response", {})
+            if response.get("resultCode") == 0:
+                token_data = response.get("data", {})
+                self._access_token = token_data.get("accessToken", "")
+                self._refresh_token = token_data.get("refreshToken", "")
+                return bool(self._access_token)
+    except Exception as e:
+        _LOGGER.error("Login failed: %s", e)
+    return False
 
     async def get_homes(self) -> list[dict]:
         """Get list of homes."""
