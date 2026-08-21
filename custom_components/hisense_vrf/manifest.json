@@ -2,10 +2,11 @@
   "domain": "hisense_vrf",
   "name": "Hisense VRF",
   "version": "0.1.0",
-  "documentation": "https://github.com/yourusername/hisense-vrf-ha",
+  "documentation": "https://github.com/ambotran/hisense-vrf-ha",
+  "issue_tracker": "https://github.com/ambotran/hisense-vrf-ha/issues",
   "requirements": ["pycryptodome>=3.17.0"],
   "dependencies": [],
-  "codeowners": [],
+  "codeowners": ["@ambotran"],
   "iot_class": "cloud_polling",
   "config_flow": true
 }
