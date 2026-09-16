@@ -41,24 +41,44 @@ class HisenseVRFCoordinator(DataUpdateCoordinator):
         )
 
     async def _async_update_data(self) -> dict:
-        """Fetch data from API."""
         try:
             if not self.api.access_token:
                 if not await self.api.login():
                     raise UpdateFailed("Login failed")
-
             if not self.devices:
                 self.devices = await self.api.get_devices(self.home_id)
-
-            # Fetch status for all devices
-            status_map = {}
+                if not self.devices:
+                    raise UpdateFailed("Could not fetch device list (empty response)")
+            status_map: dict[str, dict] = {}
+            failed_devices: list[str] = []
             for device in self.devices:
                 device_id = device.get("deviceId", "")
-                if device_id:
-                    status = await self.api.get_device_status(self.wifi_id, device_id)
-                    status_map[device_id] = status
-
+                if not device_id:
+                    continue
+                result = await self.api.get_device_properties(
+                    [{"deviceId": device_id, "wifiId": self.wifi_id}]
+                )
+                if not result:
+                    failed_devices.append(device_id)
+                    continue
+                device_data = result[0]
+                props = device_data.get("status") or device_data.get("allStatus") or {}
+                    props.get("Y_K_Q_control"), props.get("modeRefrigeration"), props.get("modeSupplyAir"))
+                if not props:
+                    failed_devices.append(device_id)
+                    continue
+                status_map[device_id] = props
+    
+            if failed_devices and not status_map:
+                # All devices failed — token likely expired, re-login
+                _LOGGER.warning("All devices failed, attempting re-login")
+                if await self.api.login():
+                    self.devices = []  # force device re-fetch
+                    raise UpdateFailed("Re-logged in, will retry next cycle")
+                raise UpdateFailed(f"No valid status returned for any device (failed: {', '.join(failed_devices)})")
+    
             return status_map
-
+        except UpdateFailed:
+            raise
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}") from err

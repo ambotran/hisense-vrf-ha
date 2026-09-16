@@ -111,7 +111,15 @@ class HisenseVRFClimate(CoordinatorEntity, ClimateEntity):
         | ClimateEntityFeature.TURN_ON
         | ClimateEntityFeature.TURN_OFF
     )
-
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._device_id)},
+            "name": self._attr_name,
+            "manufacturer": "Hisense",
+            "model": "VRF Indoor Unit",
+        }
+        
     def __init__(
         self,
         coordinator: HisenseVRFCoordinator,
@@ -123,6 +131,17 @@ class HisenseVRFClimate(CoordinatorEntity, ClimateEntity):
         self._device_id = device_id
         self._attr_name = name
         self._attr_unique_id = f"hisense_vrf_{device_id}"
+        
+    async def async_added_to_hass(self) -> None:
+        """Register WebSocket callback when entity is added."""
+        await super().async_added_to_hass()
+        def on_ws_update(functions: dict) -> None:
+            """Handle WebSocket state push."""
+            self.hass.loop.call_soon_threadsafe(
+                self.coordinator.async_set_updated_data,
+                {**self.coordinator.data, self._device_id: functions}
+            )
+        self.coordinator.api.register_state_callback(self._device_id, on_ws_update)
 
     @property
     def _status(self) -> dict[str, str]:
@@ -163,22 +182,20 @@ class HisenseVRFClimate(CoordinatorEntity, ClimateEntity):
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set HVAC mode."""
-        commands = []
         if hvac_mode == HVACMode.OFF:
-            commands.append({"name": PROP_POWER, "value": "0"})
+            await self.coordinator.api.set_device_property(
+                self.coordinator.wifi_id, self._device_id,
+                [{"name": PROP_POWER, "value": "0"}]
+            )
         else:
-            # Turn on
-            commands.append({"name": PROP_POWER, "value": "1"})
-            # Clear all modes
-            for prop in HVAC_MODE_MAP:
-                commands.append({"name": prop, "value": "0"})
-            # Set new mode
             mode_prop = HVAC_MODE_TO_PROPS.get(hvac_mode, MODE_REFRIGERATION)
-            commands.append({"name": mode_prop, "value": "1"})
-
-        await self.coordinator.api.send_command(
-            self.coordinator.wifi_id, self._device_id, commands
-        )
+            await self.coordinator.api.set_device_property(
+                self.coordinator.wifi_id, self._device_id,
+                [
+                    {"name": PROP_POWER, "value": "1"},
+                    {"name": mode_prop, "value": "1"},
+                ]
+            )
         await self.coordinator.async_request_refresh()
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
@@ -186,7 +203,7 @@ class HisenseVRFClimate(CoordinatorEntity, ClimateEntity):
         temp = kwargs.get("temperature")
         if temp is None:
             return
-        await self.coordinator.api.send_command(
+        await self.coordinator.api.set_device_property(
             self.coordinator.wifi_id,
             self._device_id,
             [{"name": PROP_SET_TEMP, "value": str(int(temp))}],
@@ -204,14 +221,15 @@ class HisenseVRFClimate(CoordinatorEntity, ClimateEntity):
         if fan_prop:
             commands.append({"name": fan_prop, "value": "1"})
 
-        await self.coordinator.api.send_command(
+        await self.coordinator.api.set_device_property(
             self.coordinator.wifi_id, self._device_id, commands
         )
         await self.coordinator.async_request_refresh()
 
     async def async_turn_on(self) -> None:
         """Turn on."""
-        await self.coordinator.api.send_command(
+        _LOGGER.error("async_turn_on called for %s", self._device_id)
+        await self.coordinator.api.set_device_property(
             self.coordinator.wifi_id,
             self._device_id,
             [{"name": PROP_POWER, "value": "1"}],
@@ -220,7 +238,7 @@ class HisenseVRFClimate(CoordinatorEntity, ClimateEntity):
 
     async def async_turn_off(self) -> None:
         """Turn off."""
-        await self.coordinator.api.send_command(
+        await self.coordinator.api.set_device_property(
             self.coordinator.wifi_id,
             self._device_id,
             [{"name": PROP_POWER, "value": "0"}],

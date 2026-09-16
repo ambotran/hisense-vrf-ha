@@ -1,7 +1,7 @@
 """Constants for Hisense VRF integration."""
 
 DOMAIN = "hisense_vrf"
-PLATFORMS = ["climate"]
+PLATFORMS = ["climate", "sensor"]
 
 # API
 API_BASE_AUTH = "https://auth-gateway.hijuconn.com/"
@@ -33,7 +33,7 @@ CONF_HOME_ID = "home_id"
 CONF_WIFI_ID = "wifi_id"
 
 # Update interval in seconds
-UPDATE_INTERVAL = 30
+UPDATE_INTERVAL = 10
 
 # Device modes (boolean flag properties)
 MODE_REFRIGERATION = "modeRefrigeration"
